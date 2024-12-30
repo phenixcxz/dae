@@ -18,18 +18,25 @@ We assume that your dae configuration file is stored in `/usr/local/etc/dae/` .
 #!/bin/bash
 
 # Change the path to suit your needs
-cd /usr/local/etc/dae || exit 1
+cd /etc/dae || exit 1
 version="$(dae --version | head -n 1 | sed 's/dae version //')"
 UA="dae/${version} (like v2rayA/1.0 WebRequestHelper) (like v2rayN/1.0 WebRequestHelper)"
 fail=false
+updated=false
 
 while IFS=':' read -r name url
 do
         curl --retry 3 --retry-delay 5 -fL -A "$UA" "$url" -o "${name}.sub.new"
         if [[ $? -eq 0 ]]; then
-                mv "${name}.sub.new" "${name}.sub"
-                chmod 0600 "${name}.sub"
-                echo "Downloaded $name"
+                if ! cmp -s "${name}.sub.new" "${name}.sub"; then
+                        mv "${name}.sub.new" "${name}.sub"
+                        chmod 0600 "${name}.sub"
+                        updated=true
+                        echo "Downloaded and updated $name"
+                else
+                        rm "${name}.sub.new"
+                        echo "No changes for $name"
+                fi
         else
                 if [ -f "${name}.sub.new" ]; then
                         rm "${name}.sub.new"
@@ -39,7 +46,12 @@ do
         fi
 done < sublist
 
-dae reload
+if $updated; then
+        dae reload
+        echo "Configuration reloaded due to updates"
+else
+        echo "No updates, skipping reload"
+fi
 
 if $fail; then
         echo "Failed to update some subs"
@@ -57,7 +69,7 @@ chmod +x /usr/local/bin/update-dae-subs.sh
 
 This timer will automatically update dae subscriptions every 12 hours, or 15 minutes after each boot.
 
-`/etc/systemd/system/update-subs.timer`:
+`/etc/systemd/system/update-dae-subs.timer`:
 
 ```systemd
 [Unit]
@@ -71,7 +83,7 @@ OnUnitActiveSec=12h
 WantedBy=timers.target
 ```
 
-`/etc/systemd/system/update-subs.service`:
+`/etc/systemd/system/update-dae-subs.service`:
 
 ```systemd
 [Unit]
